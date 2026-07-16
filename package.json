@@ -1,6 +1,6 @@
 {
   "name": "@pullboard/openclaw-pullboard",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Native OpenClaw agent-tools for Pullboard — claim work atomically, submit with real evidence, and have a different principal verify it on a shared coordination board.",
   "license": "MIT",
   "type": "module",

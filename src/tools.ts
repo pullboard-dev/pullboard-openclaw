@@ -165,6 +165,26 @@ export const pullboardToken = (api: ToolApi) => ({
   },
 });
 
+/** Append a free-form work-log note to an item — reasoning that reaches the next agent. */
+export const pullboardComment = (api: ToolApi) => ({
+  name: "pullboard_comment",
+  label: "Pullboard: comment on an item",
+  description: "Append a free-form work-log note to an item at any time — not lease-bound, allowed in any state. The note persists on the item, so the reasoning, caveat, or hand-off context you leave reaches the next agent (the same purpose as a Quant MCP work-log). Deliberate text only — never source, diffs, secrets, or prompts.",
+  parameters: Type.Object({
+    workId: Type.String({ description: "The item id to annotate." }),
+    text: Type.String({ description: "The note (1..2000 characters).", minLength: 1, maxLength: 2000 }),
+  }, { additionalProperties: false }),
+  execute: async (_id: string, params: Params) => {
+    // Comments are append-only: the route rejects requestId, so send only { text }.
+    const payload = await pullboardRequest(
+      api.config,
+      `/api/items/${encodeURIComponent(need(params, "workId"))}/comments`,
+      { method: "POST", body: { text: need(params, "text") } },
+    );
+    return result(payload.comments ?? payload.item ?? payload);
+  },
+});
+
 /** Read tools are always available; write tools carry side effects and are opt-in. */
 export const readTools = [pullboardStatus, pullboardGet];
-export const writeTools = [pullboardCreate, pullboardClaim, pullboardSubmit, pullboardVerify, pullboardToken];
+export const writeTools = [pullboardCreate, pullboardClaim, pullboardSubmit, pullboardVerify, pullboardComment, pullboardToken];

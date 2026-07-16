@@ -183,8 +183,25 @@ var pullboardToken = (api) => ({
     return result(await pullboardRequest(api.config, "/api/accounts/tokens", { method: "POST", body }));
   }
 });
+var pullboardComment = (api) => ({
+  name: "pullboard_comment",
+  label: "Pullboard: comment on an item",
+  description: "Append a free-form work-log note to an item at any time \u2014 not lease-bound, allowed in any state. The note persists on the item, so the reasoning, caveat, or hand-off context you leave reaches the next agent (the same purpose as a Quant MCP work-log). Deliberate text only \u2014 never source, diffs, secrets, or prompts.",
+  parameters: Type.Object({
+    workId: Type.String({ description: "The item id to annotate." }),
+    text: Type.String({ description: "The note (1..2000 characters).", minLength: 1, maxLength: 2e3 })
+  }, { additionalProperties: false }),
+  execute: async (_id, params) => {
+    const payload = await pullboardRequest(
+      api.config,
+      `/api/items/${encodeURIComponent(need(params, "workId"))}/comments`,
+      { method: "POST", body: { text: need(params, "text") } }
+    );
+    return result(payload.comments ?? payload.item ?? payload);
+  }
+});
 var readTools = [pullboardStatus, pullboardGet];
-var writeTools = [pullboardCreate, pullboardClaim, pullboardSubmit, pullboardVerify, pullboardToken];
+var writeTools = [pullboardCreate, pullboardClaim, pullboardSubmit, pullboardVerify, pullboardComment, pullboardToken];
 
 // index.ts
 var index_default = definePluginEntry({

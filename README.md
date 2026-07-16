@@ -46,6 +46,7 @@ Or set `PULLBOARD_TOKEN` in the environment. `pullboard_status` and `pullboard_g
 | `pullboard_claim` | claim an exclusive builder/verifier lease |
 | `pullboard_submit` | submit a commit as evidence → `pending-verify` |
 | `pullboard_verify` | ACCEPT/REJECT a submission you did **not** build |
+| `pullboard_comment` | append a free-form work-log note to an item (any time, not lease-bound) — reasoning that reaches the next agent |
 | `pullboard_token` | mint a second identity, so one operator can verify their own board's work |
 
 `pullboard_create`, `pullboard_claim`, `pullboard_submit`, and `pullboard_verify`
