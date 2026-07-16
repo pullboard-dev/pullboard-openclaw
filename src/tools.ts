@@ -20,6 +20,11 @@ const need = (params: Params, key: string) => {
   if (!value) throw new Error(`pullboard: '${key}' is required`);
   return value;
 };
+const requestIdParameter = () => Type.Optional(Type.String({
+  description: "Caller idempotency key. Reuse the exact value after a timeout; changed input with the same key is rejected.",
+  minLength: 1,
+  maxLength: 200,
+}));
 
 /** Read the board: counts + the priority chain. The only way to SEE work. */
 export const pullboardStatus = (api: ToolApi) => ({
@@ -55,12 +60,14 @@ export const pullboardCreate = (api: ToolApi) => ({
     description: Type.Optional(Type.String()),
     criteria: Type.Optional(Type.Array(Type.String(), { description: "Checkable done conditions." })),
     priority: Type.Optional(Type.String({ description: "now | next | backlog (default backlog)." })),
+    requestId: requestIdParameter(),
   }, { additionalProperties: false }),
   execute: async (_id: string, params: Params) => {
     const body: Record<string, unknown> = { title: need(params, "title") };
     if (str(params, "description")) body.description = params.description;
     if (Array.isArray(params.criteria)) body.criteria = params.criteria;
     if (str(params, "priority")) body.priority = params.priority;
+    if (str(params, "requestId")) body.requestId = params.requestId;
     const payload = await pullboardRequest(api.config, "/api/items", { method: "POST", body: withRequestId(body) });
     return result(payload.item ?? payload);
   },
@@ -75,12 +82,14 @@ export const pullboardClaim = (api: ToolApi) => ({
     workId: Type.String(),
     role: Type.Optional(Type.String({ description: "builder (default) or verifier." })),
     ttl: Type.Optional(Type.Number({ description: "Lease seconds (default 3600).", minimum: 1 })),
+    requestId: requestIdParameter(),
   }, { additionalProperties: false }),
   execute: async (_id: string, params: Params) => {
     const body = withRequestId({
       workId: need(params, "workId"),
       role: str(params, "role") || "builder",
       ttl: typeof params.ttl === "number" ? params.ttl : 3600,
+      requestId: str(params, "requestId"),
     });
     return result(await pullboardRequest(api.config, "/api/claim", { method: "POST", body }));
   },
@@ -98,6 +107,7 @@ export const pullboardSubmit = (api: ToolApi) => ({
     criterionDigest: Type.String({ description: "sha256:<sha256 of the item's criteria>." }),
     evidenceDigest: Type.String({ description: "sha256:<sha256 of your proof it passes>." }),
     completionTier: Type.Optional(Type.String({ description: "independent (default) or self-reported." })),
+    requestId: requestIdParameter(),
   }, { additionalProperties: false }),
   execute: async (_id: string, params: Params) => {
     const body = withRequestId({
@@ -107,6 +117,7 @@ export const pullboardSubmit = (api: ToolApi) => ({
       criterionDigest: need(params, "criterionDigest"),
       evidenceDigest: need(params, "evidenceDigest"),
       completionTier: str(params, "completionTier") || "independent",
+      requestId: str(params, "requestId"),
     });
     return result(await pullboardRequest(api.config, "/api/submit", { method: "POST", body }));
   },
@@ -125,6 +136,7 @@ export const pullboardVerify = (api: ToolApi) => ({
     headSHA: Type.Optional(Type.String({ description: "The submission head (from the item)." })),
     criterionDigest: Type.Optional(Type.String()),
     findingDigest: Type.Optional(Type.String({ description: "REJECT only: sha256 of what failed." })),
+    requestId: requestIdParameter(),
   }, { additionalProperties: false }),
   execute: async (_id: string, params: Params) => {
     const body: Record<string, unknown> = withRequestId({
@@ -132,6 +144,7 @@ export const pullboardVerify = (api: ToolApi) => ({
       decision: need(params, "decision"),
       reasonCode: need(params, "reasonCode"),
       evidenceDigest: need(params, "evidenceDigest"),
+      requestId: str(params, "requestId"),
     });
     for (const k of ["headSHA", "criterionDigest", "findingDigest"]) if (str(params, k)) body[k] = params[k];
     return result(await pullboardRequest(api.config, "/api/verify", { method: "POST", body }));

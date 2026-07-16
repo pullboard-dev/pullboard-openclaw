@@ -54,6 +54,11 @@ var need = (params, key) => {
   if (!value) throw new Error(`pullboard: '${key}' is required`);
   return value;
 };
+var requestIdParameter = () => Type.Optional(Type.String({
+  description: "Caller idempotency key. Reuse the exact value after a timeout; changed input with the same key is rejected.",
+  minLength: 1,
+  maxLength: 200
+}));
 var pullboardStatus = (api) => ({
   name: "pullboard_status",
   label: "Pullboard: read the board",
@@ -82,13 +87,15 @@ var pullboardCreate = (api) => ({
     title: Type.String({ description: "Short task title." }),
     description: Type.Optional(Type.String()),
     criteria: Type.Optional(Type.Array(Type.String(), { description: "Checkable done conditions." })),
-    priority: Type.Optional(Type.String({ description: "now | next | backlog (default backlog)." }))
+    priority: Type.Optional(Type.String({ description: "now | next | backlog (default backlog)." })),
+    requestId: requestIdParameter()
   }, { additionalProperties: false }),
   execute: async (_id, params) => {
     const body = { title: need(params, "title") };
     if (str(params, "description")) body.description = params.description;
     if (Array.isArray(params.criteria)) body.criteria = params.criteria;
     if (str(params, "priority")) body.priority = params.priority;
+    if (str(params, "requestId")) body.requestId = params.requestId;
     const payload = await pullboardRequest(api.config, "/api/items", { method: "POST", body: withRequestId(body) });
     return result(payload.item ?? payload);
   }
@@ -100,13 +107,15 @@ var pullboardClaim = (api) => ({
   parameters: Type.Object({
     workId: Type.String(),
     role: Type.Optional(Type.String({ description: "builder (default) or verifier." })),
-    ttl: Type.Optional(Type.Number({ description: "Lease seconds (default 3600).", minimum: 1 }))
+    ttl: Type.Optional(Type.Number({ description: "Lease seconds (default 3600).", minimum: 1 })),
+    requestId: requestIdParameter()
   }, { additionalProperties: false }),
   execute: async (_id, params) => {
     const body = withRequestId({
       workId: need(params, "workId"),
       role: str(params, "role") || "builder",
-      ttl: typeof params.ttl === "number" ? params.ttl : 3600
+      ttl: typeof params.ttl === "number" ? params.ttl : 3600,
+      requestId: str(params, "requestId")
     });
     return result(await pullboardRequest(api.config, "/api/claim", { method: "POST", body }));
   }
@@ -121,7 +130,8 @@ var pullboardSubmit = (api) => ({
     headSHA: Type.String({ description: "The exact commit you produced (40 hex)." }),
     criterionDigest: Type.String({ description: "sha256:<sha256 of the item's criteria>." }),
     evidenceDigest: Type.String({ description: "sha256:<sha256 of your proof it passes>." }),
-    completionTier: Type.Optional(Type.String({ description: "independent (default) or self-reported." }))
+    completionTier: Type.Optional(Type.String({ description: "independent (default) or self-reported." })),
+    requestId: requestIdParameter()
   }, { additionalProperties: false }),
   execute: async (_id, params) => {
     const body = withRequestId({
@@ -130,7 +140,8 @@ var pullboardSubmit = (api) => ({
       headSHA: need(params, "headSHA"),
       criterionDigest: need(params, "criterionDigest"),
       evidenceDigest: need(params, "evidenceDigest"),
-      completionTier: str(params, "completionTier") || "independent"
+      completionTier: str(params, "completionTier") || "independent",
+      requestId: str(params, "requestId")
     });
     return result(await pullboardRequest(api.config, "/api/submit", { method: "POST", body }));
   }
@@ -146,14 +157,16 @@ var pullboardVerify = (api) => ({
     evidenceDigest: Type.String({ description: "sha256:<sha256 of your verification proof>." }),
     headSHA: Type.Optional(Type.String({ description: "The submission head (from the item)." })),
     criterionDigest: Type.Optional(Type.String()),
-    findingDigest: Type.Optional(Type.String({ description: "REJECT only: sha256 of what failed." }))
+    findingDigest: Type.Optional(Type.String({ description: "REJECT only: sha256 of what failed." })),
+    requestId: requestIdParameter()
   }, { additionalProperties: false }),
   execute: async (_id, params) => {
     const body = withRequestId({
       leaseId: need(params, "leaseId"),
       decision: need(params, "decision"),
       reasonCode: need(params, "reasonCode"),
-      evidenceDigest: need(params, "evidenceDigest")
+      evidenceDigest: need(params, "evidenceDigest"),
+      requestId: str(params, "requestId")
     });
     for (const k of ["headSHA", "criterionDigest", "findingDigest"]) if (str(params, k)) body[k] = params[k];
     return result(await pullboardRequest(api.config, "/api/verify", { method: "POST", body }));
