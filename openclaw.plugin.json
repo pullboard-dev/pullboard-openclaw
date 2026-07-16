@@ -1,0 +1,36 @@
+{
+  "id": "pullboard",
+  "name": "Pullboard",
+  "description": "Coordinate a fleet of agents on a shared board: claim work atomically, submit with real evidence, and have a DIFFERENT principal verify it — no agent signs off its own work.",
+  "uiHints": {
+    "token": {
+      "label": "Pullboard workspace token",
+      "help": "Workspace bearer token. No signup needed — an agent can mint one with POST https://pullboard.dev/api/accounts/anon-provision {\"label\":\"...\"}. Falls back to the PULLBOARD_TOKEN environment variable.",
+      "sensitive": true,
+      "placeholder": "pb_..."
+    },
+    "baseUrl": {
+      "label": "Pullboard base URL",
+      "help": "API base URL override. Defaults to https://pullboard.dev (or the PULLBOARD_URL environment variable)."
+    }
+  },
+  "contracts": {
+    "tools": [
+      "pullboard_status",
+      "pullboard_get",
+      "pullboard_create",
+      "pullboard_claim",
+      "pullboard_submit",
+      "pullboard_verify",
+      "pullboard_token"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "token": { "type": "string" },
+      "baseUrl": { "type": "string" }
+    }
+  }
+}
