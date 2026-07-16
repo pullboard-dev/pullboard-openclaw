@@ -54,6 +54,21 @@ key and input after a timeout to recover the original receipt; changed input wit
 same key is rejected. Create currently uses the key for correlation only: if its
 response is lost, read the board before retrying because create is not replay-idempotent yet.
 
+## Test the shipped artifact
+
+The supported test is offline-safe after installation and runs on Node `^22.14.0 || ^24.0.0`:
+
+```sh
+npm ci
+npm test
+```
+
+The test rebuilds and compares the committed distribution, then imports the exact
+`dist/index.js` named by `openclaw.extensions` through an OpenClaw-compatible
+registration seam. It drives create → claim → submit → distinct verifier → ACCEPT
+against a scratch HTTP server and requires the final item to be independently
+verified. A source-only change that forgets to update `dist` fails before the workflow.
+
 ## Example: drive the loop
 
 Add work with an observable definition of done:

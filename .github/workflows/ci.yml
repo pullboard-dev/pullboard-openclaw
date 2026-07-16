@@ -8,15 +8,19 @@ permissions:
   contents: read
 
 jobs:
-  locked-install:
+  compiled-artifact:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.14.0, 24.x]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.14.0
+          node-version: ${{ matrix.node }}
           cache: npm
       - name: Install exactly the committed dependency graph
         run: npm ci
-      - name: Build the shipped artifact
-        run: npm run build
+      - name: Test the exact compiled artifact
+        run: npm test
