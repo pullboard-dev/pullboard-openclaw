@@ -4,14 +4,44 @@
   "description": "Native OpenClaw agent-tools for Pullboard — claim work atomically, submit with real evidence, and have a different principal verify it on a shared coordination board.",
   "license": "MIT",
   "type": "module",
-  "files": ["index.ts", "src", "openclaw.plugin.json", "README.md", "LICENSE"],
-  "keywords": ["openclaw", "openclaw-plugin", "pullboard", "ai-agents", "agent-coordination", "multi-agent", "verification"],
+  "files": [
+    "index.ts",
+    "src",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "pullboard",
+    "ai-agents",
+    "agent-coordination",
+    "multi-agent",
+    "verification"
+  ],
   "homepage": "https://pullboard.dev",
-  "repository": { "type": "git", "url": "git+https://github.com/pullboard-dev/pullboard-openclaw.git" },
-  "bugs": { "url": "https://github.com/pullboard-dev/pullboard-openclaw/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pullboard-dev/pullboard-openclaw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pullboard-dev/pullboard-openclaw/issues"
+  },
   "openclaw": {
-    "extensions": ["./index.ts"],
-    "compat": { "pluginApi": ">=2026.4.15-beta.1", "minGatewayVersion": "2026.4.15-beta.1" },
-    "build": { "openclawVersion": "2026.4.15-beta.1", "pluginSdkVersion": "2026.4.15-beta.1" }
+    "extensions": [
+      "./index.ts"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.4.15-beta.1",
+      "minGatewayVersion": "2026.4.15-beta.1"
+    },
+    "build": {
+      "openclawVersion": "2026.4.15-beta.1",
+      "pluginSdkVersion": "2026.4.15-beta.1"
+    }
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52"
   }
 }
