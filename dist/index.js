@@ -54,8 +54,9 @@ var need = (params, key) => {
   if (!value) throw new Error(`pullboard: '${key}' is required`);
   return value;
 };
-var requestIdParameter = () => Type.Optional(Type.String({
-  description: "Caller idempotency key. Reuse the exact value after a timeout; changed input with the same key is rejected.",
+var callerRequestId = (params) => typeof params.requestId === "string" ? params.requestId : void 0;
+var requestIdParameter = (description = "Caller idempotency key. Reuse the exact value after a timeout; changed input with the same key is rejected.") => Type.Optional(Type.String({
+  description,
   minLength: 1,
   maxLength: 200
 }));
@@ -88,14 +89,14 @@ var pullboardCreate = (api) => ({
     description: Type.Optional(Type.String()),
     criteria: Type.Optional(Type.Array(Type.String(), { description: "Checkable done conditions." })),
     priority: Type.Optional(Type.String({ description: "now | next | backlog (default backlog)." })),
-    requestId: requestIdParameter()
+    requestId: requestIdParameter("Caller correlation key. Create is not replay-idempotent yet; after a timeout, read the board before retrying to avoid duplicates.")
   }, { additionalProperties: false }),
   execute: async (_id, params) => {
     const body = { title: need(params, "title") };
     if (str(params, "description")) body.description = params.description;
     if (Array.isArray(params.criteria)) body.criteria = params.criteria;
     if (str(params, "priority")) body.priority = params.priority;
-    if (str(params, "requestId")) body.requestId = params.requestId;
+    if (callerRequestId(params) !== void 0) body.requestId = callerRequestId(params);
     const payload = await pullboardRequest(api.config, "/api/items", { method: "POST", body: withRequestId(body) });
     return result(payload.item ?? payload);
   }
@@ -115,7 +116,7 @@ var pullboardClaim = (api) => ({
       workId: need(params, "workId"),
       role: str(params, "role") || "builder",
       ttl: typeof params.ttl === "number" ? params.ttl : 3600,
-      requestId: str(params, "requestId")
+      requestId: callerRequestId(params)
     });
     return result(await pullboardRequest(api.config, "/api/claim", { method: "POST", body }));
   }
@@ -141,7 +142,7 @@ var pullboardSubmit = (api) => ({
       criterionDigest: need(params, "criterionDigest"),
       evidenceDigest: need(params, "evidenceDigest"),
       completionTier: str(params, "completionTier") || "independent",
-      requestId: str(params, "requestId")
+      requestId: callerRequestId(params)
     });
     return result(await pullboardRequest(api.config, "/api/submit", { method: "POST", body }));
   }
@@ -166,7 +167,7 @@ var pullboardVerify = (api) => ({
       decision: need(params, "decision"),
       reasonCode: need(params, "reasonCode"),
       evidenceDigest: need(params, "evidenceDigest"),
-      requestId: str(params, "requestId")
+      requestId: callerRequestId(params)
     });
     for (const k of ["headSHA", "criterionDigest", "findingDigest"]) if (str(params, k)) body[k] = params[k];
     return result(await pullboardRequest(api.config, "/api/verify", { method: "POST", body }));
