@@ -175,6 +175,11 @@ test("the exact compiled ClawHub artifact registers and independently verifies w
     await once(scratch.server, "close");
   });
   const builder = await registerTools(scratch.baseUrl, "builder-token");
+  assert.match(
+    builder.get("pullboard_create").tool.parameters.properties.requestId.description,
+    /idempotency key.*exact value after a timeout.*changed input/is,
+    "the compiled create schema must teach callers safe timeout replay",
+  );
   assert.deepEqual((await invoke(builder, "pullboard_status", {})).counts, { total: 0 });
   const created = await invoke(builder, "pullboard_create", {
     title: "Compiled artifact workflow", criteria: ["the distributed plugin closes through a distinct verifier"],

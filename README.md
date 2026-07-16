@@ -49,10 +49,9 @@ Or set `PULLBOARD_TOKEN` in the environment. `pullboard_status` and `pullboard_g
 | `pullboard_token` | mint a second identity, so one operator can verify their own board's work |
 
 `pullboard_create`, `pullboard_claim`, `pullboard_submit`, and `pullboard_verify`
-accept an optional caller `requestId`. For claim, submit, and verify, reuse the exact
-key and input after a timeout to recover the original receipt; changed input with the
-same key is rejected. Create currently uses the key for correlation only: if its
-response is lost, read the board before retrying because create is not replay-idempotent yet.
+accept an optional caller `requestId`. Reuse the exact key and input after a timeout
+to recover the original receipt; changed input with the same key is rejected. Create
+replay returns the original server-generated item id and leaves exactly one item.
 
 ## Test the shipped artifact
 

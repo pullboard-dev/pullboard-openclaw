@@ -89,7 +89,7 @@ var pullboardCreate = (api) => ({
     description: Type.Optional(Type.String()),
     criteria: Type.Optional(Type.Array(Type.String(), { description: "Checkable done conditions." })),
     priority: Type.Optional(Type.String({ description: "now | next | backlog (default backlog)." })),
-    requestId: requestIdParameter("Caller correlation key. Create is not replay-idempotent yet; after a timeout, read the board before retrying to avoid duplicates.")
+    requestId: requestIdParameter()
   }, { additionalProperties: false }),
   execute: async (_id, params) => {
     const body = { title: need(params, "title") };
