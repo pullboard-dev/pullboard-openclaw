@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "module",
   "files": [
+    "dist",
     "index.ts",
     "src",
     "openclaw.plugin.json",
@@ -30,7 +31,7 @@
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "compat": {
       "pluginApi": ">=2026.4.15-beta.1",
@@ -43,5 +44,12 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52"
+  },
+  "scripts": {
+    "build": "esbuild index.ts --bundle --outfile=dist/index.js --format=esm --platform=node --packages=external"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.0"
   }
 }
