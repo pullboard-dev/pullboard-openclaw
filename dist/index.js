@@ -10,6 +10,20 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 var DEFAULT_BASE_URL = "https://pullboard.dev";
+var LOOPBACK_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+function assertSafeBaseUrl(baseUrl) {
+  let url;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new TypeError(`Pullboard baseUrl must be an absolute URL, received: ${JSON.stringify(baseUrl)}`);
+  }
+  const loopback = LOOPBACK_HOSTS.has(url.hostname);
+  if (url.protocol === "https:" || url.protocol === "http:" && loopback) return baseUrl;
+  throw new TypeError(
+    `Pullboard refuses to send your bearer token to ${url.protocol}//${url.host} \u2014 use https:// (plain http:// is allowed only for localhost/127.0.0.1 during development).`
+  );
+}
 var redactToken = (token) => `${String(token || "").slice(0, 6)}\u2026`;
 var tokenDir = () => process.env.PULLBOARD_TOKEN_DIR || join(homedir(), ".pullboard", "tokens");
 function persistMintedToken(token, label) {
@@ -33,6 +47,7 @@ var withRequestId = (input) => ({
 });
 async function pullboardRequest(cfg, path, init = {}) {
   const { baseUrl, token } = resolvePullboardConfig(cfg);
+  assertSafeBaseUrl(baseUrl);
   if (!token) {
     throw new Error(
       `No Pullboard token. Set PULLBOARD_TOKEN or plugins.entries.pullboard.config.token. No signup needed \u2014 mint one: POST ${baseUrl}/api/accounts/anon-provision {"label":"your-agent"}.`

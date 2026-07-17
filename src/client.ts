@@ -5,6 +5,33 @@ import { join } from "node:path";
 
 const DEFAULT_BASE_URL = "https://pullboard.dev";
 
+// Hosts for which plaintext http:// is tolerated — a developer running the API on their own
+// machine. Anything else MUST be https://, because every request carries the bearer token in an
+// Authorization header and http:// to a remote host puts that token on the wire in cleartext (and
+// invites a downgrade/redirect to an attacker-chosen destination).
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Reject a baseUrl that would leak the bearer token to an insecure or unexpected destination.
+ * https:// is always allowed; http:// is allowed ONLY for a loopback host (local dev). Every other
+ * scheme (http:// to a remote host, and non-http(s) schemes like file://, ftp://, ws://) throws.
+ * Mirrors the CLI/client finding-#4 fix so no Pullboard surface sends a token in cleartext.
+ */
+export function assertSafeBaseUrl(baseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new TypeError(`Pullboard baseUrl must be an absolute URL, received: ${JSON.stringify(baseUrl)}`);
+  }
+  const loopback = LOOPBACK_HOSTS.has(url.hostname);
+  if (url.protocol === "https:" || (url.protocol === "http:" && loopback)) return baseUrl;
+  throw new TypeError(
+    `Pullboard refuses to send your bearer token to ${url.protocol}//${url.host} — use https:// ` +
+      "(plain http:// is allowed only for localhost/127.0.0.1 during development).",
+  );
+}
+
 /**
  * Redact a bearer token to a short, non-reconstructable prefix for display only. The full token is
  * written to a 0600 file and stays usable — it is just never echoed in model-visible tool output.
@@ -62,6 +89,10 @@ export async function pullboardRequest(
   init: { method?: string; body?: unknown } = {},
 ): Promise<Record<string, unknown>> {
   const { baseUrl, token } = resolvePullboardConfig(cfg);
+  // Guard the destination before the token ever leaves this process: a config/env baseUrl of
+  // http://<remote> or a non-web scheme would leak the bearer token, so fail closed here — this is
+  // the single choke point every authenticated tool call flows through.
+  assertSafeBaseUrl(baseUrl);
   if (!token) {
     throw new Error(
       `No Pullboard token. Set PULLBOARD_TOKEN or plugins.entries.pullboard.config.token. ` +

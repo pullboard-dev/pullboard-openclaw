@@ -244,3 +244,36 @@ test("the exact compiled ClawHub artifact registers and independently verifies w
     "GET /api/items/compiled-artifact-work", "POST /api/verify", "GET /api/items/compiled-artifact-work",
   ]);
 });
+
+test("a config/env baseUrl that would leak the token to an insecure host fails closed before any fetch (finding #4)", async () => {
+  // http:// to a REMOTE host would put the bearer token on the wire in cleartext. The compiled
+  // plugin must reject the destination BEFORE it ever fetches — there is no server here, so a
+  // guard that did not fire would attempt a real network call instead of throwing synchronously.
+  const remote = await registerTools("http://evil.example", "builder-token");
+  await assert.rejects(
+    invoke(remote, "pullboard_status", {}),
+    (error) => error instanceof Error
+      && /refuses to send your bearer token/.test(error.message)
+      && /http:\/\/evil\.example/.test(error.message),
+    "http:// to a remote host is rejected before the token is sent",
+  );
+
+  // A non-web scheme (file://) is likewise refused.
+  const scheme = await registerTools("file:///etc/passwd", "builder-token");
+  await assert.rejects(
+    invoke(scheme, "pullboard_status", {}),
+    (error) => /refuses to send your bearer token/.test(error.message),
+    "a non-http(s) scheme is refused",
+  );
+
+  // https:// anywhere and http://127.0.0.1 (local dev) stay allowed — the loopback path is the one
+  // the primary end-to-end test above exercises against its scratch server on 127.0.0.1.
+  const loopback = await registerTools("http://127.0.0.1:1", "builder-token");
+  await assert.rejects(
+    invoke(loopback, "pullboard_status", {}),
+    // 127.0.0.1:1 is loopback (allowed by the guard), so this fails at the SOCKET, not the guard —
+    // proving the destination check let a loopback dev URL through to the fetch.
+    (error) => error instanceof Error && !/refuses to send your bearer token/.test(error.message),
+    "http://127.0.0.1 is permitted by the guard (fails later at the socket, not the destination check)",
+  );
+});
