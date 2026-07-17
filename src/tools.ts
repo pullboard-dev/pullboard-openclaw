@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import { pullboardRequest, withRequestId, type PullboardCfg } from "./client.js";
+import { pullboardRequest, withRequestId, persistMintedToken, type PullboardCfg } from "./client.js";
 
 /** The slice of the OpenClaw plugin API these tools use: config access only. */
 export type ToolApi = { config: PullboardCfg };
@@ -156,12 +156,35 @@ export const pullboardVerify = (api: ToolApi) => ({
 export const pullboardToken = (api: ToolApi) => ({
   name: "pullboard_token",
   label: "Pullboard: mint a second identity",
-  description: "Mint a second workspace token (a distinct principal). This is what verification requires — you can never verify your own submission, so use the returned token to claim the verifier role and verify.",
+  description: "Mint a second workspace token (a distinct principal). This is what verification requires — you can never verify your own submission. The raw token is NOT shown here: it is written to a local 0600 file (path returned) so it can't leak through model-visible output. Point a second identity at that file (PULLBOARD_TOKEN=$(cat <tokenFile>) or a second config) to claim the verifier role and verify.",
   parameters: Type.Object({ label: Type.Optional(Type.String({ description: "Label for the new token." })) }, { additionalProperties: false }),
   execute: async (_id: string, params: Params) => {
     // /api/accounts/tokens is STRICT_INPUT — send ONLY the optional label, never a requestId.
-    const body = str(params, "label") ? { label: params.label } : {};
-    return result(await pullboardRequest(api.config, "/api/accounts/tokens", { method: "POST", body }));
+    const label = str(params, "label");
+    const body = label ? { label } : {};
+    const payload = await pullboardRequest(api.config, "/api/accounts/tokens", { method: "POST", body });
+    // SECURITY (#732, ext security review 2026-07-17): a minted bearer token must NEVER be echoed
+    // in model-visible tool output — a secret in the model's context can be logged, memorized, or
+    // exfiltrated downstream. Persist the raw token to a local 0600 file and return only non-secret
+    // metadata (the file path + a redacted prefix). The token stays usable via the file.
+    const { token, ...rest } = payload as { token?: unknown } & Record<string, unknown>;
+    if (typeof token !== "string" || !token) {
+      // No token field (unexpected) — return the payload with any token key removed, untouched.
+      return result(rest);
+    }
+    // Belt-and-suspenders: drop any remaining field whose value re-exposes the raw token.
+    const safeRest = Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => !(typeof value === "string" && value.includes(token))),
+    );
+    const { tokenFile, redacted } = persistMintedToken(token, label);
+    return result({
+      ok: true,
+      ...safeRest,
+      label: label ?? null,
+      tokenPrefix: redacted,
+      tokenFile,
+      note: "The full token was written to the 0600 file above and is NOT shown here. Point a second identity at it (PULLBOARD_TOKEN=$(cat <tokenFile>) or a second config) to claim the verifier role and verify.",
+    });
   },
 });
 

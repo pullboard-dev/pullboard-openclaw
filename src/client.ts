@@ -1,6 +1,33 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const DEFAULT_BASE_URL = "https://pullboard.dev";
+
+/**
+ * Redact a bearer token to a short, non-reconstructable prefix for display only. The full token is
+ * written to a 0600 file and stays usable — it is just never echoed in model-visible tool output.
+ */
+export const redactToken = (token: string): string => `${String(token || "").slice(0, 6)}…`;
+
+/** Directory where minted secondary tokens land. Overridable (mainly for tests) via env. */
+const tokenDir = (): string => process.env.PULLBOARD_TOKEN_DIR || join(homedir(), ".pullboard", "tokens");
+
+/**
+ * Persist a freshly minted bearer token to a local 0600 file and return ONLY non-secret metadata
+ * (the absolute path + a redacted prefix). The raw token is written to disk — so a second identity
+ * can still use it — but is NEVER returned to the model. Mirrors the CLI's finding-#2 fix, where the
+ * full token lives in ~/.pullboard/config.json (0600) and only a redacted prefix is printed.
+ */
+export function persistMintedToken(token: string, label?: string): { tokenFile: string; redacted: string } {
+  const dir = tokenDir();
+  mkdirSync(dir, { recursive: true });
+  const safeLabel = (label || "verifier").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 40) || "verifier";
+  const tokenFile = join(dir, `${safeLabel}-${Date.now().toString(36)}.token`);
+  writeFileSync(tokenFile, `${token}\n`, { mode: 0o600 });
+  return { tokenFile, redacted: redactToken(token) };
+}
 
 /** Minimal shape of the OpenClaw config we read — the plugin's own entry config. */
 export type PullboardCfg =

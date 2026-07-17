@@ -6,7 +6,21 @@ import { Type } from "@sinclair/typebox";
 
 // src/client.ts
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 var DEFAULT_BASE_URL = "https://pullboard.dev";
+var redactToken = (token) => `${String(token || "").slice(0, 6)}\u2026`;
+var tokenDir = () => process.env.PULLBOARD_TOKEN_DIR || join(homedir(), ".pullboard", "tokens");
+function persistMintedToken(token, label) {
+  const dir = tokenDir();
+  mkdirSync(dir, { recursive: true });
+  const safeLabel = (label || "verifier").replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 40) || "verifier";
+  const tokenFile = join(dir, `${safeLabel}-${Date.now().toString(36)}.token`);
+  writeFileSync(tokenFile, `${token}
+`, { mode: 384 });
+  return { tokenFile, redacted: redactToken(token) };
+}
 function resolvePullboardConfig(cfg) {
   const entry = cfg?.plugins?.entries?.pullboard?.config ?? {};
   const token = entry.token || process.env.PULLBOARD_TOKEN;
@@ -176,11 +190,28 @@ var pullboardVerify = (api) => ({
 var pullboardToken = (api) => ({
   name: "pullboard_token",
   label: "Pullboard: mint a second identity",
-  description: "Mint a second workspace token (a distinct principal). This is what verification requires \u2014 you can never verify your own submission, so use the returned token to claim the verifier role and verify.",
+  description: "Mint a second workspace token (a distinct principal). This is what verification requires \u2014 you can never verify your own submission. The raw token is NOT shown here: it is written to a local 0600 file (path returned) so it can't leak through model-visible output. Point a second identity at that file (PULLBOARD_TOKEN=$(cat <tokenFile>) or a second config) to claim the verifier role and verify.",
   parameters: Type.Object({ label: Type.Optional(Type.String({ description: "Label for the new token." })) }, { additionalProperties: false }),
   execute: async (_id, params) => {
-    const body = str(params, "label") ? { label: params.label } : {};
-    return result(await pullboardRequest(api.config, "/api/accounts/tokens", { method: "POST", body }));
+    const label = str(params, "label");
+    const body = label ? { label } : {};
+    const payload = await pullboardRequest(api.config, "/api/accounts/tokens", { method: "POST", body });
+    const { token, ...rest } = payload;
+    if (typeof token !== "string" || !token) {
+      return result(rest);
+    }
+    const safeRest = Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => !(typeof value === "string" && value.includes(token)))
+    );
+    const { tokenFile, redacted } = persistMintedToken(token, label);
+    return result({
+      ok: true,
+      ...safeRest,
+      label: label ?? null,
+      tokenPrefix: redacted,
+      tokenFile,
+      note: "The full token was written to the 0600 file above and is NOT shown here. Point a second identity at it (PULLBOARD_TOKEN=$(cat <tokenFile>) or a second config) to claim the verifier role and verify."
+    });
   }
 });
 var pullboardComment = (api) => ({

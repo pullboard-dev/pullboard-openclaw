@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "node:http";
 import { register } from "node:module";
 import { once } from "node:events";
 import test from "node:test";
 import { Value } from "@sinclair/typebox/value";
+
+// A deliberately distinctive minted bearer token so the leak assertion is unambiguous: #732 requires
+// that this exact secret NEVER appears in the model-visible output of pullboard_token.
+const VERIFIER_TOKEN = "pbt-verifier-9f8e7d6c5b4a3210-SECRET";
 
 const digest = (value) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const json = (response, status, payload) => {
@@ -104,8 +111,8 @@ const scratchBoard = async () => {
         assertExactKeys(input, ["label"]);
         assert.equal(input.label, "compiled verifier");
         assert.equal(principal, "builder");
-        tokens.set("verifier-token", "verifier");
-        return json(response, 201, { token: "verifier-token" });
+        tokens.set(VERIFIER_TOKEN, "verifier");
+        return json(response, 201, { token: VERIFIER_TOKEN });
       }
       if (request.method === "POST" && url.pathname === "/api/verify") {
         const input = await body(request);
@@ -152,11 +159,11 @@ const registerTools = async (baseUrl, token) => {
     registerTool: (tool, options = {}) => tools.set(tool.name, { tool, options }),
   });
   assert.deepEqual([...tools.keys()].toSorted(), [
-    "pullboard_claim", "pullboard_create", "pullboard_get", "pullboard_status",
+    "pullboard_claim", "pullboard_comment", "pullboard_create", "pullboard_get", "pullboard_status",
     "pullboard_submit", "pullboard_token", "pullboard_verify",
   ]);
   assert.deepEqual([...tools].filter(([, { options }]) => options.optional).map(([name]) => name).toSorted(), [
-    "pullboard_claim", "pullboard_create", "pullboard_submit", "pullboard_token", "pullboard_verify",
+    "pullboard_claim", "pullboard_comment", "pullboard_create", "pullboard_submit", "pullboard_token", "pullboard_verify",
   ]);
   return tools;
 };
@@ -170,7 +177,14 @@ const invoke = async (tools, name, input) => {
 
 test("the exact compiled ClawHub artifact registers and independently verifies work over scratch HTTP", async (t) => {
   const scratch = await scratchBoard();
+  // Redirect the plugin's minted-token file into a scratch dir so the real ~/.pullboard is untouched.
+  const tokenHome = mkdtempSync(join(tmpdir(), "pb-openclaw-token-"));
+  const priorTokenDir = process.env.PULLBOARD_TOKEN_DIR;
+  process.env.PULLBOARD_TOKEN_DIR = tokenHome;
   t.after(async () => {
+    if (priorTokenDir === undefined) delete process.env.PULLBOARD_TOKEN_DIR;
+    else process.env.PULLBOARD_TOKEN_DIR = priorTokenDir;
+    rmSync(tokenHome, { recursive: true, force: true });
     scratch.server.close();
     await once(scratch.server, "close");
   });
@@ -194,7 +208,18 @@ test("the exact compiled ClawHub artifact registers and independently verifies w
     evidenceDigest: digest("compiled builder evidence"),
   });
   assert.equal(submission.state, "pending-verify");
-  const verifierToken = (await invoke(builder, "pullboard_token", { label: "compiled verifier" })).token;
+  const provision = await invoke(builder, "pullboard_token", { label: "compiled verifier" });
+  // #732 (ext security review): the minted bearer token must NEVER appear in model-visible output.
+  assert.ok(
+    !JSON.stringify(provision).includes(VERIFIER_TOKEN),
+    "pullboard_token output must not contain the raw minted token",
+  );
+  assert.equal(provision.token, undefined, "no raw `token` field is surfaced");
+  assert.match(provision.tokenPrefix, /…$/, "only a short redacted prefix is surfaced");
+  assert.ok(provision.tokenFile, "the raw token is written to a local file instead");
+  // ...but the full token is still usable — read it back from the 0600 file the tool wrote.
+  const verifierToken = readFileSync(provision.tokenFile, "utf8").trim();
+  assert.equal(verifierToken, VERIFIER_TOKEN, "the persisted file holds the real, usable token");
   const verifier = await registerTools(scratch.baseUrl, verifierToken);
   const verifierClaim = await invoke(verifier, "pullboard_claim", { workId: created.workId, role: "verifier" });
   const pending = await invoke(verifier, "pullboard_get", { workId: created.workId });
