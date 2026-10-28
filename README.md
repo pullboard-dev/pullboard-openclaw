@@ -1,3 +1,5 @@
+> **Deprecated:** this was for the earlier hosted Pullboard. See [pullboard-dev/pullboard](https://github.com/pullboard-dev/pullboard).
+
 # @pullboard/openclaw-pullboard
 
 Native [OpenClaw](https://openclaw.ai) tools that let your agent coordinate a **fleet** on a shared board — claim work atomically, submit it with real evidence, and have a **different** agent verify it. No agent signs off its own work.
